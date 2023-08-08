@@ -10,9 +10,9 @@
 using namespace std;
 
 wstring tetrisBlock[7];
-int fieldWidth = 12;
-int fieldHeight = 18;
-vector<uint8_t> field;
+int boardWidth = 12;
+int boardHeight = 18;
+vector<uint8_t> board;
 
 int screenWidth = 120;
 int screenHeight = 40;
@@ -35,11 +35,11 @@ bool validFit(int tetrisblock, int rotation, int locx, int locy) {
 			// get index of tetris block according to its rotation
 			int index = rotate(x, y, rotation);
 
-			// get index of block inside the play field
-			int findex = (locy + y) * fieldWidth + (locx + x);
+			// get index of block inside the play board
+			int findex = (locy + y) * boardWidth + (locx + x);
 
-			if (locx + x >= 0 && locx + x < fieldWidth && locy + y >= 0 && locy + y < fieldHeight) {
-				if (tetrisBlock[tetrisblock][index] == L'X' && field[findex] != 0) {
+			if (locx + x >= 0 && locx + x < boardWidth && locy + y >= 0 && locy + y < boardHeight) {
+				if (tetrisBlock[tetrisblock][index] == L'X' && board[findex] != 0) {
 					return false; //  fail on first hit
 				}
 			}
@@ -58,14 +58,12 @@ int main()
 	tetrisBlock[5].append(L".X...X...XX.....");
 	tetrisBlock[6].append(L"..X...X..XX.....");
 
-	//field = vector<uint8_t>(fieldWidth * fieldHeight); // play field buffer
+	board.resize(boardWidth * boardHeight);
 
-	field.resize(fieldWidth * fieldHeight);
-
-	for (int x = 0; x < fieldWidth; x++) { // boundary 
-		for (int y = 0; y < fieldHeight; y++) {
-			field[y * fieldWidth + x] = (x == 0 || x == fieldWidth - 1
-				|| y == fieldHeight - 1) ? 9 : 0;
+	for (int x = 0; x < boardWidth; x++) { // boundary 
+		for (int y = 0; y < boardHeight; y++) {
+			board[y * boardWidth + x] = (x == 0 || x == boardWidth - 1
+				|| y == boardHeight - 1) ? 9 : 0;
 		}
 	}
 
@@ -78,9 +76,9 @@ int main()
 
 	bool gameOver = false;
 
-	int currentPiece = 0;
+	int currentblock = 0;
 	int currentRotation = 0;
-	int currentX = fieldWidth / 2;
+	int currentX = boardWidth / 2;
 	int currentY = 0;
 
 	bool key[4];
@@ -108,27 +106,27 @@ int main()
 		}
 
 		// game logic
-		currentX -= key[0] && validFit(currentPiece, currentRotation, currentX - 1, currentY);
+		currentX -= key[0] && validFit(currentblock, currentRotation, currentX - 1, currentY);
 		
-		currentX += key[2] && validFit(currentPiece, currentRotation, currentX + 1, currentY);
+		currentX += key[2] && validFit(currentblock, currentRotation, currentX + 1, currentY);
 
-		currentY += key[1] && validFit(currentPiece, currentRotation, currentX, currentY + 1);
+		currentY += key[1] && validFit(currentblock, currentRotation, currentX, currentY + 1);
 
 		if (key[3]) {
-			currentRotation += !rotateKeyHold && validFit(currentPiece, currentRotation + 1, currentX, currentY);
+			currentRotation += !rotateKeyHold && validFit(currentblock, currentRotation + 1, currentX, currentY);
 			rotateKeyHold = true;
 		}
 		
 		else rotateKeyHold = false;
 
 		if (autoLower) {
-			if (validFit(currentPiece, currentRotation, currentX, currentY + 1)) currentY++; // can fit lower the block
+			if (validFit(currentblock, currentRotation, currentX, currentY + 1)) currentY++; // can fit lower the block
 			else {
 				// lock the block in the board
 				for (int x = 0; x < 4; x++) {
 					for (int y = 0; y < 4; y++) {
-						if (tetrisBlock[currentPiece][rotate(x, y, currentRotation)] == L'X')
-							field[(currentY + y) * fieldWidth + (currentX + x)] = currentPiece + 1;
+						if (tetrisBlock[currentblock][rotate(x, y, currentRotation)] == L'X')
+							board[(currentY + y) * boardWidth + (currentX + x)] = currentblock + 1;
 					}
 				}
 
@@ -138,11 +136,11 @@ int main()
 
 				// check full line formation
 				for (int y = 0; y < 4; y++) {
-					if (currentY + y < fieldHeight - 1) {
+					if (currentY + y < boardHeight - 1) {
 						bool line = true;
 
-						for (int x = 1; x < fieldWidth - 1; x++) {
-							if (field[(currentY + y) * fieldWidth + x] == 0) {
+						for (int x = 1; x < boardWidth - 1; x++) {
+							if (board[(currentY + y) * boardWidth + x] == 0) {
 								line = false;
 								break;
 							}
@@ -151,8 +149,8 @@ int main()
 						if (line) {
 							// delete line, set to ======
 
-							for (int x = 1; x < fieldWidth - 1; x++) {
-								field[(currentY + y) * fieldWidth + x] = 8;
+							for (int x = 1; x < boardWidth - 1; x++) {
+								board[(currentY + y) * boardWidth + x] = 8;
 							}
 
 							lines.push_back(currentY + y);
@@ -166,13 +164,13 @@ int main()
 				}
 
 				// next block
-				currentX = fieldWidth / 2;
+				currentX = boardWidth / 2;
 				currentY = 0;
 				currentRotation = 0;
-				currentPiece = rand() % 7;
+				currentblock = rand() % 7;
 
 				// game over condition
-				gameOver = !validFit(currentPiece, currentRotation, currentX, currentY);
+				gameOver = !validFit(currentblock, currentRotation, currentX, currentY);
 			}
 
 			diffLvl = 0;
@@ -181,35 +179,35 @@ int main()
 		// render output
 
 		// draw board
-		for (int x = 0; x < fieldWidth; x++) {
-			for (int y = 0; y < fieldHeight; y++) {
-				screen[(y + 2) * screenWidth + (x + 2)] = L" ABCDEFG=#"[field[y * fieldWidth + x]];
+		for (int x = 0; x < boardWidth; x++) {
+			for (int y = 0; y < boardHeight; y++) {
+				screen[(y + 2) * screenWidth + (x + 2)] = L" ABCDEFG=#"[board[y * boardWidth + x]];
 			}
 		}
 
 		// draw falling block
 		for (int x = 0; x < 4; x++) {
 			for (int y = 0; y < 4; y++) {
-				if (tetrisBlock[currentPiece][rotate(x, y, currentRotation)] == L'X') {
-					screen[(currentY + y + 2) * screenWidth + (currentX + x + 2)] = currentPiece + 65;
+				if (tetrisBlock[currentblock][rotate(x, y, currentRotation)] == L'X') {
+					screen[(currentY + y + 2) * screenWidth + (currentX + x + 2)] = currentblock + 65;
 				}
 			}
 		}
 
 		//display score
-		swprintf_s(&screen[2 * screenWidth + fieldWidth + 6], 16, L"SCORE: %8d", score);
+		swprintf_s(&screen[2 * screenWidth + boardWidth + 6], 16, L"SCORE: %8d", score);
 
 		if (!lines.empty()) {
 			WriteConsoleOutputCharacter(console, screen.data(), screenWidth * screenHeight, { 0, 0 }, &bytesWritten);
 			this_thread::sleep_for(400ms); // delay removing lines
 
 			for (auto& lineElem : lines) {
-				for (int x = 1; x < fieldWidth - 1; x++) {
+				for (int x = 1; x < boardWidth - 1; x++) {
 					for (int y = lineElem; y > 0; y--) {
-						field[y * fieldWidth + x] = field[(y - 1) * fieldWidth + x];
+						board[y * boardWidth + x] = board[(y - 1) * boardWidth + x];
 					}
 
-					field[x] = 0;
+					board[x] = 0;
 				}
 			}
 

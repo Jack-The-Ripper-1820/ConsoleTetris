@@ -5,6 +5,7 @@
 #include <vector>
 #include <Windows.h>
 #include <memory>
+#include <thread>
 
 using namespace std;
 
@@ -32,15 +33,14 @@ bool validFit(int tetrisblock, int rotation, int locx, int locy) {
 	for (int x = 0; x < 4; x++) {
 		for (int y = 0; y < 4; y++) {
 			// get index of tetris block according to its rotation
-			int index = rotate(locx, locy, rotation);
+			int index = rotate(x, y, rotation);
 
 			// get index of block inside the play field
 			int findex = (locy + y) * fieldWidth + (locx + x);
 
-			if (locx + x >= 0 && locx + x < fieldWidth) {
-				if (locy + y >= 0 && locy + y < fieldHeight) {
-					if (tetrisBlock[tetrisblock][index] == L'X' && field[findex] != 0)
-						return false; //  fail on first hit
+			if (locx + x >= 0 && locx + x < fieldWidth && locy + y >= 0 && locy + y < fieldHeight) {
+				if (tetrisBlock[tetrisblock][index] == L'X' && field[findex] != 0) {
+					return false; //  fail on first hit
 				}
 			}
 		}
@@ -50,14 +50,6 @@ bool validFit(int tetrisblock, int rotation, int locx, int locy) {
 }
 int main()
 {
-	//// try to get dynamically screen width and height
-	//try {
-
-	//}
-	//catch (exception const& e) {
-	//	cout << e.what() << endl;
-	//}
-
 	tetrisBlock[0].append(L"..X...X...X...X."); 
 	tetrisBlock[1].append(L"..X..XX...X.....");
 	tetrisBlock[2].append(L".....XX..XX.....");
@@ -77,8 +69,6 @@ int main()
 		}
 	}
 
-	//vector<wchar_t> sc 
-	//wchar_t* screen = new wchar_t[screenWidth, screenHeight];
 	vector<wchar_t> screen(screenWidth * screenHeight, L' ');
 	for (int i = 0; i < screenWidth * screenHeight; i++) screen[i] = L' ';
 
@@ -93,12 +83,100 @@ int main()
 	int currentX = fieldWidth / 2;
 	int currentY = 0;
 
+	bool key[4];
+	const unsigned char keys[] = { 'A', 'S', 'D', VK_SHIFT };
+	bool rotateKeyHold = false;
+
+	// difficulty vars
+	int diff = 20, diffLvl = 0, blockCnt = 0;
+	bool autoLower = false;
+
+	int score = 0;
+
+	vector<int> lines;
+
+	// game loop (tick)
 	while (!gameOver) {
 		// game timer
-		
+		this_thread::sleep_for(50ms);
+		diffLvl++;
+		autoLower = diffLvl == diff;
+
 		// game input
+		for (int i = 0; i < 4; i++) {
+			key[i] = (0x8000 & GetAsyncKeyState(keys[i])) != 0;
+		}
 
 		// game logic
+		currentX -= key[0] && validFit(currentPiece, currentRotation, currentX - 1, currentY);
+		
+		currentX += key[2] && validFit(currentPiece, currentRotation, currentX + 1, currentY);
+
+		currentY += key[1] && validFit(currentPiece, currentRotation, currentX, currentY + 1);
+
+		if (key[3]) {
+			currentRotation += !rotateKeyHold && validFit(currentPiece, currentRotation + 1, currentX, currentY);
+			rotateKeyHold = true;
+		}
+		
+		else rotateKeyHold = false;
+
+		if (autoLower) {
+			if (validFit(currentPiece, currentRotation, currentX, currentY + 1)) currentY++; // can fit lower the block
+			else {
+				// lock the block in the board
+				for (int x = 0; x < 4; x++) {
+					for (int y = 0; y < 4; y++) {
+						if (tetrisBlock[currentPiece][rotate(x, y, currentRotation)] == L'X')
+							field[(currentY + y) * fieldWidth + (currentX + x)] = currentPiece + 1;
+					}
+				}
+
+				// increase difficulty
+				blockCnt++;
+				diff -= blockCnt % 10 == 0 && diff >= 10;
+
+				// check full line formation
+				for (int y = 0; y < 4; y++) {
+					if (currentY + y < fieldHeight - 1) {
+						bool line = true;
+
+						for (int x = 1; x < fieldWidth - 1; x++) {
+							if (field[(currentY + y) * fieldWidth + x] == 0) {
+								line = false;
+								break;
+							}
+						}
+
+						if (line) {
+							// delete line, set to ======
+
+							for (int x = 1; x < fieldWidth - 1; x++) {
+								field[(currentY + y) * fieldWidth + x] = 8;
+							}
+
+							lines.push_back(currentY + y);
+						}
+					}
+				}
+
+				score += 5;
+				if (!lines.empty()) {
+					score += (1 << lines.size()) * 20;
+				}
+
+				// next block
+				currentX = fieldWidth / 2;
+				currentY = 0;
+				currentRotation = 0;
+				currentPiece = rand() % 7;
+
+				// game over condition
+				gameOver = !validFit(currentPiece, currentRotation, currentX, currentY);
+			}
+
+			diffLvl = 0;
+		}
 
 		// render output
 
@@ -109,21 +187,43 @@ int main()
 			}
 		}
 
-		//// draw falling block
-		//for (int x = 0; x < 4; x++) {
-		//	for (int y = 0; y < 4; y++) {
-		//		if (tetrisBlock[currentPiece][rotate(x, y, currentRotation)] == L'X') {
-		//			screen[(currentY + y + 2) * screenWidth + ]
-		//		}
-		//	}
-		//}
+		// draw falling block
+		for (int x = 0; x < 4; x++) {
+			for (int y = 0; y < 4; y++) {
+				if (tetrisBlock[currentPiece][rotate(x, y, currentRotation)] == L'X') {
+					screen[(currentY + y + 2) * screenWidth + (currentX + x + 2)] = currentPiece + 65;
+				}
+			}
+		}
 
+		//display score
+		swprintf_s(&screen[2 * screenWidth + fieldWidth + 6], 16, L"SCORE: %8d", score);
+
+		if (!lines.empty()) {
+			WriteConsoleOutputCharacter(console, screen.data(), screenWidth * screenHeight, { 0, 0 }, &bytesWritten);
+			this_thread::sleep_for(400ms); // delay removing lines
+
+			for (auto& lineElem : lines) {
+				for (int x = 1; x < fieldWidth - 1; x++) {
+					for (int y = lineElem; y > 0; y--) {
+						field[y * fieldWidth + x] = field[(y - 1) * fieldWidth + x];
+					}
+
+					field[x] = 0;
+				}
+			}
+
+			lines.clear();
+		}
+
+		// display frame
 		WriteConsoleOutputCharacter(console, screen.data(), screenWidth * screenHeight, {0, 0}, &bytesWritten);
 	}
 
-	// Display frame
-
-	//std::cout << "Hello" << endl;
+	// Game Over Message
+	CloseHandle(console);
+	std::cout << "GAME OVER! SCORE: " << score << endl;
+	std::system("pause");
 
 	return 0;
 }
